@@ -3,6 +3,8 @@ site_description: A simple Python dungeon generator.
 docs_dir: docs
 theme:
   name: material
+  logo: assets/dungy.svg
+  favicon: assets/dungy.svg
   features:
     - navigation.sections
     - navigation.top
