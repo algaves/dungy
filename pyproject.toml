@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dungy"
+dynamic = ["version"]
+description = """\
+    A small, dependency-free dungeon generator. \
+    `DungeonGenerator` builds rectangular dungeon levels \
+    containing non-overlapping rooms connected by corridors, \
+    then renders the result as ASCII text.\
+    """
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+license = {text = "CC0-1.0"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Games / Entertainment",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+References = "https://www.roguebasin.com/index.php/A_Simple_Dungeon_Generator_for_Python_2_or_3"
+
+[dependency-groups]
+dev = [
+    "mkdocs",
+    "mkdocs-material",
+    "mypy<1.17",
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "dungy.__version__"}
+
+[tool.setuptools.data-files]
+"share/dungy" = ["references.bib"]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+src = ["src"]
+extend-exclude = ["main.py"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+extend-ignore = ["D203", "D213", "COM812"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/dungy/dungeon.py" = [
+    "D", "S311", "T201", "PLR0912", "PLR0917", "PLR0915",
+    "PLR0913", "PLR2004", "FBT001", "FBT002", "EXE001",
+    "CPY001", "C901",
+]
+"tests/**/*.py" = [
+    "S101", "S311", "PLR2004", "RUF001", "D100", "D103", "D104",
+    "INP001", "PT018", "SIM300", "CPY001", "ANN001", "ANN201",
+]
+
+[tool.ruff.format]
+exclude = []
+
+[tool.mypy]
+python_version = "3.8"
+strict = true
+ignore_missing_imports = true
+show_error_codes = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
