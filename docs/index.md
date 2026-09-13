@@ -38,7 +38,7 @@ uv run python src/dungy/dungeon.py
 Use it as a library:
 
 ```python
-from dungy.dungeon import DungeonGenerator
+from dungy import DungeonGenerator
 
 gen = DungeonGenerator(width=64, height=64, max_rooms=15)
 gen.generate()

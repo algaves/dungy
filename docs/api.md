@@ -1,6 +1,19 @@
 # API
 
-## `dungy.dungeon.DungeonGenerator`
+Public API is re-exported from the package root, so
+`from dungy import DungeonGenerator` and `from dungy import Room` both work.
+
+## Data types
+
+| Type | Description |
+| --- | --- |
+| `Room(x, y, w, h)` | A `NamedTuple`: top-left corner `(x, y)`, size `(w, h)`. Tuple-compatible (`room[0] == room.x`). |
+| `Corridor` | A path of `(x, y)` points; built by `join_rooms` and `corridor_between_points`. |
+
+Rooms and corridors are also exposed on a generator after `generate()`:
+`gen.room_list` is `list[Room]` and `gen.corridor_list` is `list[Corridor]`.
+
+## `DungeonGenerator`
 
 ```python
 DungeonGenerator(
@@ -22,12 +35,19 @@ DungeonGenerator(
 | `generate()` | Build rooms, corridors, floors and walls; returns the raw grid and stores it in `level`. |
 | `render(tiles=None)` | Convert `level` to displayable strings using `tiles` (default `CHARACTER_TILES`); returns them and stores them in `tiles_level`. |
 
-After `generate()` the raw grid is in `gen.level` (`stone`/`floor`/`wall`) and
-the room/corridor geometry in `gen.room_list` / `gen.corridor_list`;
-`render()` writes displayable strings to `gen.tiles_level`.
-
 `generate()` and `render()` never print — rendering to the console is the
 caller's job.
+
+### Validation
+
+The constructor validates its configuration and raises `ValueError` with a
+clear message when the level cannot be generated:
+
+- `width`/`height` too small for `max_room_xy` (a room must fit inside the
+  1-cell border), or `min_room_xy < 1` / `max_room_xy < min_room_xy`
+- `max_rooms < 1`
+- `random_connections < 0` or `random_spurs < 0`
+- `random_spurs > 0` on a level smaller than `4 × 4`
 
 ## Module-level functions
 
@@ -37,15 +57,19 @@ caller's job.
 | --- | --- |
 | `create_level(width, height)` | A fresh `stone`-filled grid. |
 | `room_overlapping(room, room_list)` | Detect overlap against existing rooms. |
-| `generate_room(rng, width, height, min_room_xy, max_room_xy)` | Pick a random room rectangle `[x, y, w, h]`. |
-| `corridor_between_points(rng, width, height, x1, y1, x2, y2, join_type='either')` | Corridor path between two points. |
-| `join_rooms(rng, width, height, room_1, room_2, join_type='either')` | Connect two rooms; returns the corridor. |
-| `build_rooms(rng, width, height, max_rooms, min_room_xy, max_room_xy, rooms_overlap=False)` | Build a list of non-overlapping rooms. |
-| `connect_rooms(rng, width, height, room_list, random_connections, random_spurs)` | Build the corridors joining all rooms. |
+| `generate_room(rng, width, height, min_room_xy, max_room_xy)` | Pick a random room; returns a `Room`. |
+| `corridor_between_points(rng, width, height, x1, y1, x2, y2, join_type='either')` | Corridor path between two points; returns a `Corridor`. |
+| `join_rooms(rng, width, height, room_1, room_2, join_type='either')` | Connect two rooms; returns the `Corridor`. |
+| `build_rooms(rng, width, height, max_rooms, min_room_xy, max_room_xy, rooms_overlap=False)` | Build a list of non-overlapping rooms (`list[Room]`). |
+| `connect_rooms(rng, width, height, room_list, random_connections, random_spurs)` | Build the corridors joining all rooms (`list[Corridor]`). |
 | `paint_rooms(level, room_list)` | Paint room floors onto the grid. |
 | `paint_corridors(level, corridor_list)` | Paint corridor floors onto the grid. |
 | `paint_walls(level)` | Surround floors with walls. |
 | `render_level(level, tiles=CHARACTER_TILES)` | Render the raw grid to displayable strings. |
+
+`generate_room`, `build_rooms` and `connect_rooms` guard their own
+preconditions (raise `ValueError` on invalid sizes; `connect_rooms` returns
+`[]` for an empty `room_list`).
 
 ## Reproducibility
 
@@ -54,7 +78,7 @@ Pass a seeded one for reproducible output:
 
 ```python
 import random
-from dungy.dungeon import DungeonGenerator
+from dungy import DungeonGenerator
 
 gen = DungeonGenerator(width=64, height=64, max_rooms=15, rng=random.Random(0))
 gen.generate()
@@ -63,3 +87,8 @@ print(*gen.render(), sep="\n")
 
 Without one, the generator creates its own unseeded `random.Random`, so output
 is nondeterministic.
+
+## References
+
+The generation algorithm is adapted from James Spencer's CC0-licensed
+dungeon generator; the machine-readable citation is in `references.bib`.
