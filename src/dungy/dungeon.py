@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Adapted from James Spencer's "generator-1.py" (see references.bib).
+
 # generator-1.py, a simple python dungeon generator by
 # James Spencer <jamessp [at] gmail.com>.
 
@@ -13,21 +15,81 @@
 from __future__ import annotations
 
 import random
+from typing import TYPE_CHECKING, NamedTuple, NoReturn
 
 CHARACTER_TILES: dict[str, str] = {"stone": " ", "floor": ".", "wall": "#"}
+
+if TYPE_CHECKING:
+    from typing import List, Tuple
+
+    Point = Tuple[int, int]
+    Corridor = List[Point]
+
+
+class Room(NamedTuple):
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+def _validate_room_size(
+    width: int,
+    height: int,
+    min_room_xy: int,
+    max_room_xy: int,
+) -> None:
+    if min_room_xy < 1:
+        message = "min_room_xy must be >= 1"
+        raise ValueError(message)
+    if max_room_xy < min_room_xy:
+        message = "max_room_xy must be >= min_room_xy"
+        raise ValueError(message)
+    if width < max_room_xy + 2 or height < max_room_xy + 2:
+        message = "width and height must be >= max_room_xy + 2 so rooms fit inside the border"
+        raise ValueError(message)
+
+
+def _validate_config(
+    width: int,
+    height: int,
+    max_rooms: int,
+    min_room_xy: int,
+    max_room_xy: int,
+    random_connections: int,
+    random_spurs: int,
+) -> None:
+    _validate_room_size(width, height, min_room_xy, max_room_xy)
+    if max_rooms < 1:
+        message = "max_rooms must be >= 1"
+        raise ValueError(message)
+    if random_connections < 0:
+        message = "random_connections must be >= 0"
+        raise ValueError(message)
+    if random_spurs < 0:
+        message = "random_spurs must be >= 0"
+        raise ValueError(message)
+    if random_spurs > 0 and (width < 4 or height < 4):
+        message = "random spurs need width and height >= 4"
+        raise ValueError(message)
+
+
+def _unknown_join_type(join_type: str) -> NoReturn:
+    message = f"unknown join_type: {join_type!r}"
+    raise ValueError(message)
 
 
 def create_level(width: int, height: int) -> list[list[str]]:
     return [["stone"] * width for _ in range(height)]
 
 
-def room_overlapping(room: list[int], room_list: list[list[int]]) -> bool:
+def room_overlapping(room: Room, room_list: list[Room]) -> bool:
     x, y, w, h = room
     return any(
-        x < (current_room[0] + current_room[2])
-        and current_room[0] < (x + w)
-        and y < (current_room[1] + current_room[3])
-        and current_room[1] < (y + h)
+        x < (current_room.x + current_room.w)
+        and current_room.x < (x + w)
+        and y < (current_room.y + current_room.h)
+        and current_room.y < (y + h)
         for current_room in room_list
     )
 
@@ -38,12 +100,13 @@ def generate_room(
     height: int,
     min_room_xy: int,
     max_room_xy: int,
-) -> list[int]:
+) -> Room:
+    _validate_room_size(width, height, min_room_xy, max_room_xy)
     w = rng.randint(min_room_xy, max_room_xy)
     h = rng.randint(min_room_xy, max_room_xy)
     x = rng.randint(1, width - w - 1)
     y = rng.randint(1, height - h - 1)
-    return [x, y, w, h]
+    return Room(x, y, w, h)
 
 
 def corridor_between_points(
@@ -55,7 +118,7 @@ def corridor_between_points(
     x2: int,
     y2: int,
     join_type: str = "either",
-) -> list[tuple[int, int]]:
+) -> Corridor:
     if x1 == x2 or y1 == y2:
         return [(x1, y1), (x2, y2)]
 
@@ -77,20 +140,19 @@ def corridor_between_points(
     if join == "bottom":
         return [(x1, y1), (x2, y1), (x2, y2)]
 
-    message = f"unknown join_type: {join_type!r}"
-    raise ValueError(message)
+    _unknown_join_type(join_type)
 
 
 def join_rooms(
     rng: random.Random,
     width: int,
     height: int,
-    room_1: list[int],
-    room_2: list[int],
+    room_1: Room,
+    room_2: Room,
     join_type: str = "either",
-) -> list[tuple[int, int]]:
+) -> Corridor:
     sorted_rooms = [room_1, room_2]
-    sorted_rooms.sort(key=lambda room: room[0])
+    sorted_rooms.sort(key=lambda room: room.x)
 
     x1, y1, w1, h1 = sorted_rooms[0]
     x1_2 = x1 + w1 - 1
@@ -150,8 +212,7 @@ def join_rooms(
         jy2 = y2_2 + 1
         return corridor_between_points(rng, width, height, jx1, jy1, jx2, jy2, "bottom")
 
-    message = f"unknown join_type: {join_type!r}"
-    raise ValueError(message)
+    _unknown_join_type(join_type)
 
 
 def build_rooms(
@@ -162,8 +223,8 @@ def build_rooms(
     min_room_xy: int,
     max_room_xy: int,
     rooms_overlap: bool = False,
-) -> list[list[int]]:
-    room_list: list[list[int]] = []
+) -> list[Room]:
+    room_list: list[Room] = []
     max_iters = max_rooms * 5
 
     for _ in range(max_iters):
@@ -186,11 +247,14 @@ def connect_rooms(
     rng: random.Random,
     width: int,
     height: int,
-    room_list: list[list[int]],
+    room_list: list[Room],
     random_connections: int,
     random_spurs: int,
-) -> list[list[tuple[int, int]]]:
-    corridor_list: list[list[tuple[int, int]]] = [
+) -> list[Corridor]:
+    if not room_list:
+        return []
+
+    corridor_list: list[Corridor] = [
         join_rooms(rng, width, height, room_list[a], room_list[a + 1])
         for a in range(len(room_list) - 1)
     ]
@@ -201,36 +265,36 @@ def connect_rooms(
         corridor_list.append(join_rooms(rng, width, height, room_1, room_2))
 
     for _ in range(random_spurs):
-        spur = [rng.randint(2, width - 2), rng.randint(2, height - 2), 1, 1]
+        spur = Room(rng.randint(2, width - 2), rng.randint(2, height - 2), 1, 1)
         target = rng.choice(room_list)
         corridor_list.append(join_rooms(rng, width, height, spur, target))
 
     return corridor_list
 
 
-def paint_rooms(level: list[list[str]], room_list: list[list[int]]) -> None:
+def paint_rooms(level: list[list[str]], room_list: list[Room]) -> None:
     for room in room_list:
-        for width in range(room[2]):
-            for height in range(room[3]):
-                level[room[1] + height][room[0] + width] = "floor"
+        for dx in range(room.w):
+            for dy in range(room.h):
+                level[room.y + dy][room.x + dx] = "floor"
 
 
 def paint_corridors(
     level: list[list[str]],
-    corridor_list: list[list[tuple[int, int]]],
+    corridor_list: list[Corridor],
 ) -> None:
     for corridor in corridor_list:
         x1, y1 = corridor[0]
         x2, y2 = corridor[1]
-        for width in range(abs(x1 - x2) + 1):
-            for height in range(abs(y1 - y2) + 1):
-                level[min(y1, y2) + height][min(x1, x2) + width] = "floor"
+        for dx in range(abs(x1 - x2) + 1):
+            for dy in range(abs(y1 - y2) + 1):
+                level[min(y1, y2) + dy][min(x1, x2) + dx] = "floor"
 
         if len(corridor) == 3:
             x3, y3 = corridor[2]
-            for width in range(abs(x2 - x3) + 1):
-                for height in range(abs(y2 - y3) + 1):
-                    level[min(y2, y3) + height][min(x2, x3) + width] = "floor"
+            for dx in range(abs(x2 - x3) + 1):
+                for dy in range(abs(y2 - y3) + 1):
+                    level[min(y2, y3) + dy][min(x2, x3) + dx] = "floor"
 
 
 def paint_walls(level: list[list[str]]) -> None:
@@ -276,6 +340,15 @@ class DungeonGenerator:
         tiles: dict[str, str] = CHARACTER_TILES,
         rng: random.Random | None = None,
     ) -> None:
+        _validate_config(
+            width,
+            height,
+            max_rooms,
+            min_room_xy,
+            max_room_xy,
+            random_connections,
+            random_spurs,
+        )
         self.width: int = width
         self.height: int = height
         self.max_rooms: int = max_rooms
@@ -284,11 +357,11 @@ class DungeonGenerator:
         self.rooms_overlap: bool = rooms_overlap
         self.random_connections: int = random_connections
         self.random_spurs: int = random_spurs
-        self.tiles: dict[str, str] = tiles
+        self.tiles: dict[str, str] = dict(tiles)
         self.rng: random.Random = rng if rng is not None else random.Random()
         self.level: list[list[str]] = []
-        self.room_list: list[list[int]] = []
-        self.corridor_list: list[list[tuple[int, int]]] = []
+        self.room_list: list[Room] = []
+        self.corridor_list: list[Corridor] = []
         self.tiles_level: list[str] = []
 
     def generate(self) -> list[list[str]]:
